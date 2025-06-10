@@ -47,11 +47,10 @@ This project aims to predict the likelihood of patients being readmitted to the 
 
 ## Files Included
 - `Readmission_Risk_Presentation.pptx`: Summary for stakeholders
-- `notebook.ipynb`: Full modeling and evaluation pipeline
+- `diabetes-ml.ipynb`: Full modeling and evaluation pipeline
 - `models/`: Saved model objects for deployment
 - `data/`: Cleaned dataset used in modeling
 
 ## Author
 Created by [Raphael Muthenya]  
 Date: June 2025
-
