@@ -30,40 +30,82 @@ def load_model_components():
         # Find the most recent model files
         model_dir = 'saved_models'
         
-        # Get the latest model files (assuming timestamp naming)
-        model_files = [f for f in os.listdir(model_dir) if f.startswith('readmission_rf_')]
-        preprocessor_files = [f for f in os.listdir(model_dir) if f.startswith('preprocessor_')]
-        metadata_files = [f for f in os.listdir(model_dir) if f.startswith('model_metadata_')]
+        if not os.path.exists(model_dir):
+            raise FileNotFoundError(f"Model directory '{model_dir}' not found. Please run the model training pipeline first.")
+        
+        # Get the latest model files (prioritize 'fixed' versions)
+        all_files = os.listdir(model_dir)
+        
+        # Look for fixed models first, then any readmission models
+        model_files = [f for f in all_files if f.startswith('readmission_rf_fixed_')] or \
+                     [f for f in all_files if f.startswith('readmission_rf_')]
+        
+        preprocessor_files = [f for f in all_files if f.startswith('preprocessor_fixed_')] or \
+                            [f for f in all_files if f.startswith('preprocessor_')]
+        
+        metadata_files = [f for f in all_files if f.startswith('model_metadata_fixed_')] or \
+                        [f for f in all_files if f.startswith('model_metadata_')]
         
         if not (model_files and preprocessor_files and metadata_files):
-            raise FileNotFoundError("Model files not found. Please run the model saving pipeline first.")
+            available_files = [f for f in all_files if f.endswith(('.pkl', '.json'))]
+            raise FileNotFoundError(f"""
+Model files not found in '{model_dir}'.
+Available files: {available_files}
+
+Please run the model training and saving pipeline first:
+1. Run the complete Random Forest training code
+2. Run the model saving code
+3. Then start this API server
+""")
         
         # Use the most recent files
-        latest_model = sorted(model_files)[-1]
-        latest_preprocessor = sorted(preprocessor_files)[-1]
-        latest_metadata = sorted(metadata_files)[-1]
+        latest_model = sorted(model_files, reverse=True)[0]
+        latest_preprocessor = sorted(preprocessor_files, reverse=True)[0]
+        latest_metadata = sorted(metadata_files, reverse=True)[0]
         
-        # Load components
-        model = joblib.load(os.path.join(model_dir, latest_model))
-        preprocessor = joblib.load(os.path.join(model_dir, latest_preprocessor))
-        
-        with open(os.path.join(model_dir, latest_metadata), 'r') as f:
-            metadata = json.load(f)
-        
-        # Extract feature names
-        categorical_features = metadata['feature_lists']['categorical_features']
-        numeric_features = metadata['feature_lists']['numeric_features']
-        
-        print(f"✅ Model loaded successfully!")
+        print(f"🔍 Loading model files:")
         print(f"   Model: {latest_model}")
         print(f"   Preprocessor: {latest_preprocessor}")
+        print(f"   Metadata: {latest_metadata}")
+        
+        # Load components
+        model_path = os.path.join(model_dir, latest_model)
+        preprocessor_path = os.path.join(model_dir, latest_preprocessor)
+        metadata_path = os.path.join(model_dir, latest_metadata)
+        
+        model = joblib.load(model_path)
+        preprocessor = joblib.load(preprocessor_path)
+        
+        with open(metadata_path, 'r', encoding='utf-8') as f:
+            metadata = json.load(f)
+        
+        # Verify model is fitted by trying a test prediction
+        if hasattr(model, 'n_features_in_'):
+            print(f"✅ Model appears to be fitted (expects {model.n_features_in_} features)")
+        else:
+            print("⚠️  Warning: Cannot verify if model is fitted")
+        
+        # Extract feature names
+        categorical_features = metadata.get('feature_lists', {}).get('categorical_features', [])
+        numeric_features = metadata.get('feature_lists', {}).get('numeric_features', [])
+        
+        print(f"✅ Model loaded successfully!")
+        print(f"   Model type: {metadata.get('model_info', {}).get('model_type', 'Unknown')}")
+        print(f"   Status: {metadata.get('model_info', {}).get('status', 'Unknown')}")
         print(f"   Categorical features: {len(categorical_features)}")
         print(f"   Numeric features: {len(numeric_features)}")
+        print(f"   Performance AUC: {metadata.get('performance_metrics', {}).get('test_auc', 'N/A')}")
         
         return True
         
     except Exception as e:
         print(f"❌ Error loading model: {e}")
+        print(f"")
+        print(f"🔧 Troubleshooting steps:")
+        print(f"1. Make sure you ran the Random Forest training code completely")
+        print(f"2. Run the model saving/fixing code above")
+        print(f"3. Check that saved_models directory exists and has .pkl files")
+        print(f"4. Verify the model was actually fitted during training")
         return False
 
 def create_patient_dataframe(patient_data):
